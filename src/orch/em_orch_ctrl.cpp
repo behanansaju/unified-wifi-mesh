@@ -76,6 +76,9 @@ bool em_orch_ctrl_t::is_em_ready_for_orch_fini(em_cmd_t *pcmd, em_t *em)
                 em->set_topo_query_tx_count(0);
                 printf("%s:%d: Maximum topo sync tx threshold crossed, transitioning to fini\n", __func__, __LINE__);
                 return true;
+            } else if (em->get_state() == em_state_ctrl_topo_synchronized) {
+                em->set_state(em_state_ctrl_channel_query_pending);
+                return true;
             }
             break;
     }
@@ -109,6 +112,7 @@ void em_orch_ctrl_t::pre_process_cancel(em_cmd_t *pcmd, em_t *em)
 		case em_cmd_type_em_config:
            	em->set_state(em_state_ctrl_misconfigured);
             em->set_topo_query_tx_count(0);
+            em->set_channel_pref_query_tx_count(0);
 
 			// send cfg renew so that controller can orchestrate renew
 			ev.type = em_event_type_bus;

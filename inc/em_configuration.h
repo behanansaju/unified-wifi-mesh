@@ -121,6 +121,7 @@ public:
     static em_wsc_msg_type_t get_wsc_msg_type(unsigned char *buff, unsigned int len);
 
     int send_topology_query_msg();
+    int send_channel_pref_query_msg();
     int send_autoconfig_renew_msg();
     int handle_encrypted_settings();
     unsigned int create_encrypted_settings(unsigned char *buff, em_haul_type_t haul_type);
@@ -187,6 +188,8 @@ public:
     void set_renew_tx_count(unsigned int cnt) { m_renew_tx_cnt = cnt; }
     int get_topo_query_tx_count() { return m_topo_query_tx_cnt; }
     void set_topo_query_tx_count(unsigned int cnt) { m_topo_query_tx_cnt = cnt; }
+    int get_channel_pref_query_tx_count() { return m_channel_pref_query_tx_cnt; }
+    void set_channel_pref_query_tx_count(unsigned int cnt) { m_channel_pref_query_tx_cnt = cnt; }
     static unsigned short msg_id;
 
     em_crypto_t m_crypto;
@@ -195,6 +198,7 @@ public:
     unsigned char m_emsk[WPS_EMSK_LEN];
     unsigned int m_renew_tx_cnt;
     unsigned int m_topo_query_tx_cnt;
+    unsigned int m_channel_pref_query_tx_cnt;
     int construct_private_subdoc();
 
     em_configuration_t();

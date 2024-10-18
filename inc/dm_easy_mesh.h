@@ -30,8 +30,8 @@
 #include "dm_dpp.h"
 #include "dm_op_class.h"
 #include "dm_radio_cap.h"
-#include "webconfig_external_proto.h"
 #include "dm_cac_comp.h"
+#include "webconfig_external_proto.h"
 
 class em_t;
 

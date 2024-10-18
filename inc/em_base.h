@@ -286,7 +286,7 @@ typedef struct {
     em_radio_id_t   ruid;
     unsigned char   num_bss;
     unsigned char   op_class_num;
-    em_op_class_t   op_classes[EM_MAX_OP_CLASS];
+    em_op_class_t   op_classes[0];
 } __attribute__((__packed__)) em_ap_radio_basic_cap_t;
 
 
@@ -1586,9 +1586,13 @@ typedef enum {
 
     em_state_ctrl_none = 0x100,
     em_state_ctrl_wsc_m1_pending,
+    em_state_ctrl_wsc_m2_sent,
     em_state_ctrl_topo_sync_pending,
+    em_state_ctrl_topo_synchronized,
     em_state_ctrl_channel_query_pending,
+    em_state_ctrl_channel_queried,
 	em_state_ctrl_channel_select_pending,
+    em_state_ctrl_channel_selected,
 	em_state_ctrl_channel_report_pending,
     em_state_ctrl_configured,
     em_state_ctrl_misconfigured,

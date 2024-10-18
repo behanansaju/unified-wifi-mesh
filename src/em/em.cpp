@@ -54,9 +54,12 @@
 void em_t::orch_execute(em_cmd_t *pcmd)
 {
     em_cmd_type_t cmd_type;
+    mac_addr_str_t	mac_str;
 
     m_cmd = pcmd;
     m_orch_state = em_orch_state_progress;
+
+    dm_easy_mesh_t::macbytes_to_string(get_radio_interface_mac(), mac_str);
 
     // now set the em state to start message exchages with peer 
     cmd_type = pcmd->m_type;
@@ -90,7 +93,11 @@ void em_t::orch_execute(em_cmd_t *pcmd)
             break;
 
         case em_cmd_type_em_config:
-            m_state = em_state_ctrl_topo_sync_pending;
+            if ((pcmd->get_orch_op() == dm_orch_type_topo_sync) && (m_state == em_state_ctrl_wsc_m2_sent)) {
+            	m_state = em_state_ctrl_topo_sync_pending;
+			} else if ((pcmd->get_orch_op() == dm_orch_type_channel_pref) && (m_state == em_state_ctrl_topo_synchronized)) {
+            	m_state = em_state_ctrl_channel_query_pending;
+			}
             break;
 
         case em_cmd_type_dev_test:
@@ -133,6 +140,7 @@ void em_t::proto_process(unsigned char *data, unsigned int len)
         case em_msg_type_autoconf_resp:
         case em_msg_type_autoconf_wsc:
         case em_msg_type_autoconf_renew:
+        case em_msg_type_topo_resp:
             em_configuration_t::process_msg(data, len);
             break;
 

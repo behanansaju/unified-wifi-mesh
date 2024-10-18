@@ -319,6 +319,68 @@ int em_configuration_t::send_autoconfig_renew_msg()
     return len;
 }
 
+int em_configuration_t::send_channel_pref_query_msg()
+{
+    unsigned char buff[MAX_EM_BUFF_SZ];
+    char *errors[EM_MAX_TLV_MEMBERS] = {0};
+    unsigned short  msg_id = em_msg_type_channel_pref_query;
+    int len = 0;
+    em_cmdu_t *cmdu;
+    em_tlv_t *tlv;
+    em_enum_type_t profile;
+    unsigned char *tmp = buff;
+    unsigned short type = htons(ETH_P_1905);
+    dm_easy_mesh_t *dm;
+
+    dm = get_data_model();
+
+    memcpy(tmp, dm->get_agent_al_interface_mac(), sizeof(mac_address_t));
+    tmp += sizeof(mac_address_t);
+    len += sizeof(mac_address_t);
+
+    memcpy(tmp, dm->get_ctrl_al_interface_mac(), sizeof(mac_address_t));
+    tmp += sizeof(mac_address_t);
+    len += sizeof(mac_address_t);
+
+    memcpy(tmp, (unsigned char *)&type, sizeof(unsigned short));
+    tmp += sizeof(unsigned short);
+    len += sizeof(unsigned short);
+
+    cmdu = (em_cmdu_t *)tmp;
+
+    memset(tmp, 0, sizeof(em_cmdu_t));
+    cmdu->type = htons(msg_id);
+    cmdu->id = htons(msg_id);
+    cmdu->last_frag_ind = 1;
+    cmdu->relay_ind = 0;
+
+    tmp += sizeof(em_cmdu_t);
+    len += sizeof(em_cmdu_t);
+
+    // End of message
+    tlv = (em_tlv_t *)tmp;
+    tlv->type = em_tlv_type_eom;
+    tlv->len = 0;
+
+    tmp += (sizeof (em_tlv_t));
+    len += (sizeof (em_tlv_t));
+    if (em_msg_t(em_msg_type_channel_pref_query, em_profile_type_3, buff, len).validate(errors) == 0) {
+        printf("Topology Query msg failed validation in tnx end\n");
+        return -1;
+    }
+
+    if (send_frame(buff, len)  < 0) {
+        printf("%s:%d: Topology Query send failed, error:%d\n", __func__, __LINE__, errno);
+        return -1;
+    }
+
+    m_channel_pref_query_tx_cnt++;
+    printf("%s:%d: Channel Pref Query (%d) Send Successful\n", __func__, __LINE__, m_channel_pref_query_tx_cnt);
+
+    return len;
+
+}
+
 int em_configuration_t::send_topology_query_msg()
 {
     unsigned char buff[MAX_EM_BUFF_SZ];
@@ -769,18 +831,43 @@ int em_configuration_t::handle_topology_response(unsigned char *buff, unsigned i
 {
     em_tlv_t *tlv;
     int tmp_len, ret = 0;
-    unsigned char msg[MAX_EM_BUFF_SZ];
     unsigned int sz, i, j;
     char *errors[EM_MAX_TLV_MEMBERS] = {0};
     bool found_op_bss = false;
+    bool found_profile = false; 
     bool found_bss_config_rprt = false;
-    
-	if (em_msg_t(em_msg_type_topo_resp, m_peer_profile, buff, len).validate(errors) == 0) {
-        printf("%s:%d: received topology response msg failed validation\n", __func__, __LINE__);
-            
-        return -1;
-    }       
+    em_profile_type_t profile;
+
+    tlv =  (em_tlv_t *)(buff + sizeof(em_raw_hdr_t) + sizeof(em_cmdu_t));
+    tmp_len = len - (sizeof(em_raw_hdr_t) + sizeof(em_cmdu_t));
         
+    while ((tlv->type != em_tlv_type_eom) && (tmp_len > 0)) {
+        if (tlv->type != em_tlv_type_profile) {
+            tmp_len -= (sizeof(em_tlv_t) + htons(tlv->len));
+            tlv = (em_tlv_t *)((unsigned char *)tlv + sizeof(em_tlv_t) + htons(tlv->len));
+
+            continue;
+
+        } else {
+            found_profile = true;
+			memcpy(&profile, tlv->value, tlv->len);
+            break; 
+        }
+    }
+
+	if (found_profile == false) {
+		printf("%s:%d: Could not find profile in topo reponse message, dropping\n", __func__, __LINE__);
+		return -1;
+	}
+
+	m_peer_profile = profile;
+
+	if (em_msg_t(em_msg_type_topo_resp, m_peer_profile, buff, len).validate(errors) == 0) {
+        printf("%s:%d: topology response msg validation failed\n", __func__, __LINE__);
+            
+        //return -1;
+    }
+     
     tlv =  (em_tlv_t *)(buff + sizeof(em_raw_hdr_t) + sizeof(em_cmdu_t));
     tmp_len = len - (sizeof(em_raw_hdr_t) + sizeof(em_cmdu_t));
         
@@ -866,10 +953,10 @@ short em_configuration_t::create_m2_msg(unsigned char *buff, em_haul_type_t haul
 {
     data_elem_attr_t *attr;
     short len = 0;
-    em_freq_band_t band;
     unsigned short size;
     unsigned char *tmp;
     tmp = buff;
+    em_freq_band_t band;
     
     // version
     attr = (data_elem_attr_t *)tmp;
@@ -1082,9 +1169,9 @@ short em_configuration_t::create_m1_msg(unsigned char *buff)
 {
     data_elem_attr_t *attr;
     short len = 0;
-    em_freq_band_t band;
     unsigned short size;
     unsigned char *tmp;
+    em_freq_band_t band;
 
     tmp = buff;
 
@@ -2316,6 +2403,7 @@ int em_configuration_t::handle_autoconfig_wsc_m1(unsigned char *buff, unsigned i
     memcpy(raw->radio, get_radio_interface_mac(), sizeof(mac_address_t));
 
     em_cmd_exec_t::send_cmd(em_service_type_ctrl, (unsigned char *)&ev, sizeof(em_event_t));
+    set_state(em_state_ctrl_wsc_m2_sent);
     return 0;
 }
 
@@ -2510,7 +2598,9 @@ void em_configuration_t::process_msg(unsigned char *data, unsigned int len)
 
         case em_msg_type_topo_resp:
             if ((get_service_type() == em_service_type_ctrl) && (get_state() == em_state_ctrl_topo_sync_pending)) {
-				//handle_topology_response(data, len);
+                if (handle_topology_response(data, len) == 0) {
+					set_state(em_state_ctrl_topo_synchronized);
+				}
 			}			
             break;
 
@@ -2631,6 +2721,10 @@ void em_configuration_t::process_ctrl_state()
         case em_state_ctrl_topo_sync_pending:
             send_topology_query_msg();
             break;
+
+        case em_state_ctrl_channel_query_pending:
+            send_channel_pref_query_msg();
+			break;
     }
 
 }
@@ -2638,6 +2732,8 @@ void em_configuration_t::process_ctrl_state()
 em_configuration_t::em_configuration_t()
 {
     m_renew_tx_cnt = 0;
+    m_channel_pref_query_tx_cnt = 0;
+	m_topo_query_tx_cnt = 0;
 }
 
 em_configuration_t::~em_configuration_t()
