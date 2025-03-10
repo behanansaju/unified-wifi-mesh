@@ -206,7 +206,7 @@ int ec_crypto::hkdf (const EVP_MD *h, int skip, uint8_t *ikm, int ikmlen,
         uint8_t *okm, int okmlen)
 {
     uint8_t *prk, *tweak, ctr, *digest;
-    int len;
+    unsigned int len;
     unsigned int digest_len, prklen, tweaklen;
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
     HMAC_CTX ctx;
@@ -214,8 +214,8 @@ int ec_crypto::hkdf (const EVP_MD *h, int skip, uint8_t *ikm, int ikmlen,
     HMAC_CTX *ctx = HMAC_CTX_new();
 #endif
 
-    digest_len = prklen = EVP_MD_size(h);
-    if ((digest = (uint8_t *)malloc(digest_len)) == NULL) {
+    digest_len = prklen = static_cast<unsigned int> (EVP_MD_size(h));
+    if ((digest = static_cast<uint8_t *> (malloc(digest_len))) == NULL) {
         perror("malloc");
         return 0;
     }
@@ -229,7 +229,7 @@ int ec_crypto::hkdf (const EVP_MD *h, int skip, uint8_t *ikm, int ikmlen,
         /*
          * if !skip then do HKDF-extract
          */
-        if ((prk = (uint8_t *)malloc(digest_len)) == NULL) {
+        if ((prk = static_cast<uint8_t *> (malloc(digest_len))) == NULL) {
             free(digest);
             perror("malloc");
             return 0;
@@ -238,31 +238,31 @@ int ec_crypto::hkdf (const EVP_MD *h, int skip, uint8_t *ikm, int ikmlen,
          * if there's no salt then use all zeros
          */
         if (!salt || (saltlen == 0)) {
-            if ((tweak = (uint8_t *)malloc(digest_len)) == NULL) {
+            if ((tweak = static_cast<uint8_t *> (malloc(digest_len))) == NULL) {
                 free(digest);
                 free(prk);
                 perror("malloc");
                 return 0;
             }
             memset(tweak, 0, digest_len);
-            tweaklen = saltlen;
+            tweaklen = static_cast<unsigned int> (saltlen);
         } else {
             tweak = salt;
-            tweaklen = saltlen;
+            tweaklen = static_cast<unsigned int> (saltlen);
         }
-        (void)HMAC(h, tweak, tweaklen, ikm, ikmlen, prk, &prklen);
+        (void)HMAC(h, tweak, static_cast<int> (tweaklen), ikm, static_cast<size_t> (ikmlen), prk, &prklen);
         if (!salt || (saltlen == 0)) {
             free(tweak);
         }
     } else {
         prk = ikm;
-        prklen = ikmlen;
+        prklen = static_cast<unsigned int> (ikmlen);
     }
     memset(digest, 0, digest_len);
     digest_len = 0;
     ctr = 0;
     len = 0;
-    while (len < okmlen) {
+    while (len < static_cast<unsigned int> (okmlen)) {
         /*
          * T(0) = all zeros
          * T(n) = HMAC(prk, T(n-1) | info | counter)
@@ -270,17 +270,17 @@ int ec_crypto::hkdf (const EVP_MD *h, int skip, uint8_t *ikm, int ikmlen,
          */
         ctr++;
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
-        HMAC_Init_ex(&ctx, prk, prklen, h, NULL);
+        HMAC_Init_ex(&ctx, prk, static_cast<int> (prklen), h, NULL);
         HMAC_Update(&ctx, digest, digest_len);
 #else
-        HMAC_Init_ex(ctx, prk, prklen, h, NULL);
+        HMAC_Init_ex(ctx, prk, static_cast<int> (prklen), h, NULL);
         HMAC_Update(ctx, digest, digest_len);
 #endif
         if (info && (infolen != 0)) {
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
             HMAC_Update(&ctx, info, infolen);
 #else
-            HMAC_Update(ctx, info, infolen);
+            HMAC_Update(ctx, info, static_cast<size_t> (infolen));
 #endif
         }
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
@@ -290,8 +290,8 @@ int ec_crypto::hkdf (const EVP_MD *h, int skip, uint8_t *ikm, int ikmlen,
         HMAC_Update(ctx, &ctr, sizeof(uint8_t));
         HMAC_Final(ctx, digest, &digest_len);
 #endif
-        if ((len + digest_len) > okmlen) {
-            memcpy(okm + len, digest, okmlen - len);
+        if ((len + digest_len) > static_cast<unsigned int> (okmlen)) {
+            memcpy(okm + len, digest, static_cast<unsigned int> (okmlen) - len);
         } else {
             memcpy(okm + len, digest, digest_len);
         }
@@ -318,10 +318,10 @@ int ec_crypto::hkdf (const EVP_MD *h, int skip, uint8_t *ikm, int ikmlen,
 void ec_crypto::print_bignum (BIGNUM *bn)
 {
     unsigned char *buf;
-    int len;
+    unsigned int len;
 
-    len = BN_num_bytes(bn);
-    if ((buf = (unsigned char *)malloc(len)) == NULL) {
+    len = static_cast<unsigned int> (BN_num_bytes(bn));
+    if ((buf = static_cast<unsigned char *> (malloc(static_cast<size_t> (len)))) == NULL) {
         printf("Could not print bignum\n");
         return;
     }
